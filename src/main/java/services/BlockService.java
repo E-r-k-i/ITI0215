@@ -1,7 +1,9 @@
 package services;
 
+
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
+import com.sun.net.httpserver.*;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -15,7 +17,7 @@ public class BlockService implements HttpHandler {
 
     @Override
     public void handle(HttpExchange exchange) throws IOException {
-        try (exchange) {
+        try {
             String method = exchange.getRequestMethod();
 
             if (method.equals("POST")) {
