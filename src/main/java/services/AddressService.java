@@ -5,8 +5,6 @@ import com.sun.net.httpserver.HttpHandler;
 
 import java.io.*;
 import java.net.URI;
-import java.net.URL;
-
 
 public class AddressService implements HttpHandler {
 
@@ -38,19 +36,6 @@ public class AddressService implements HttpHandler {
         }
     }
 
-    private void attemptConnection(String host) throws IOException {
-
-        URL url = new URL("http://localhost:6600/addr");
-
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(url.openStream(), "UTF-8"))) {
-            for (String line; (line = reader.readLine()) != null;) {
-                System.out.println(line);
-            }
-        }
-
-    }
-
-
     private String getIp(HttpExchange exchange){
 
         String hostString = exchange.getRemoteAddress().getHostString();
@@ -61,18 +46,17 @@ public class AddressService implements HttpHandler {
         return hostString+ip;
     }
 
-    private static void getRequest(HttpExchange exchange) throws IOException {
+    private static String getRequest(HttpExchange exchange) throws IOException {
         URI requestURI = exchange.getRequestURI();
         String response = hosts;
         //requestURI.toString()
 
-        //System.out.println(response);
         exchange.sendResponseHeaders(200, response.getBytes().length);
         OutputStream os = exchange.getResponseBody();
-        System.out.print(response);
+        //System.out.print(response);
         os.write(response.getBytes());
         os.close();
-
+        return response;
     }
 
 }
