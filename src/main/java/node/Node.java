@@ -1,7 +1,6 @@
 package node;
 
 import block.Block;
-import com.google.gson.Gson;
 import com.google.gson.stream.JsonReader;
 import com.sun.net.httpserver.HttpExchange;
 import lombok.Getter;
@@ -14,16 +13,16 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
 import static java.lang.String.format;
 import static java.lang.Thread.sleep;
-import static java.nio.charset.StandardCharsets.*;
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.util.Comparator.comparing;
 import static util.HttpUtils.GSON;
+import static util.HttpUtils.HTTP_GET;
 import static util.HttpUtils.HTTP_POST;
 import static util.HttpUtils.RESPONSE_CODE_OK;
 import static util.HttpUtils.createHttpUrl;
@@ -37,6 +36,7 @@ public class Node {
     private static final String SUCCESS = "success";
     private static final String FAILURE = "failure";
     private static final Long SLEEP_TIME = 10000L;
+    private static final Long SYNC_SLEEP_TIME = 10000L;
 
     private final String ip;
     private final String port;
@@ -49,6 +49,7 @@ public class Node {
 
         logBlocks();
         logClones();
+        synchronizeBlocks();
         addNodeLog(this, "started");
     }
 
@@ -63,7 +64,6 @@ public class Node {
                 os.write(payload);
             }
             addNodeLog(this, format("received block: %s", block));
-            // TODO: 22.03.2022 is it needed here to send blocks away? Maybe do it in some Thread task...
             block.ifPresent(b -> {
                 try {
                     sendBlockToClones(b);
@@ -76,7 +76,7 @@ public class Node {
 
     private Optional<Block> serializeAndAddBlockIfValid(JsonReader reader) {
         Block block = GSON.fromJson(reader, Block.class);
-        if (block == null || block.getContent() == null) {
+        if (block == null || block.getTransaction() == null) {
             throw new RuntimeException("Block is invalid");
         }
         if (!blocks.contains(block)) {
@@ -109,6 +109,40 @@ public class Node {
         }
     }
 
+    private void getBlocksFromClones() throws IOException {
+        addNodeLog(this, "querying blocks from all clones");
+        // collect blocks lists
+        List<List<Block>> result = getBlockListsFromClones();
+        // if some list is bigger than current -> replace
+        replaceBlocksIfNeeded(result);
+    }
+
+    private List<List<Block>> getBlockListsFromClones() throws IOException {
+        List<List<Block>> result = new ArrayList<>();
+        for (Clone clone: clones) {
+            var url = createHttpUrl(clone.getIp(), clone.getPort());
+            addNodeLog(this, format("querying block from clone %s", url));
+            var connection = createHttpUrlConnection(HTTP_GET, url + "/blocks/get");
+            try (InputStream inputStream = connection.getInputStream()) {
+                JsonReader reader = new JsonReader(new InputStreamReader(inputStream, UTF_8));
+                Block[] receivedNodes = GSON.fromJson(reader, Block[].class);
+                List<Block> blocks = List.of(receivedNodes);
+                result.add(blocks);
+            }
+        }
+        return result;
+    }
+
+    private void replaceBlocksIfNeeded(List<List<Block>> result) {
+        var largest = result.stream().max(comparing(List::size));
+        largest.ifPresent(largestList -> {
+            if (largestList.size() > this.blocks.size()) {
+                this.blocks.clear();
+                this.blocks.addAll(largestList);
+            }
+        });
+    }
+
     private void handleSendBlockResponse(HttpURLConnection connection, Block block, Clone clone) throws IOException {
         var cloneUrl = createHttpUrl(clone.getIp(), clone.getPort());
         var message = format(getResponse(connection).equals(SUCCESS) ? "successfully sent %s to %s" : "error sending %S to %s", block, cloneUrl);
@@ -126,6 +160,20 @@ public class Node {
             result = content.toString();
         }
         return result;
+    }
+
+    private void synchronizeBlocks() {
+        Thread thread = new Thread(() -> {
+            while (true) {
+                try {
+                    sleep(SYNC_SLEEP_TIME);
+                    getBlocksFromClones();
+                } catch (InterruptedException | IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+        thread.start();
     }
 
     private void logBlocks() {
