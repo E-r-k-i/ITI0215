@@ -16,14 +16,17 @@ public class Server {
         server.createContext("/addr", new AddressService(port, readConf()));
         server.createContext("/api", new BlockService());
         server.start();
+
+        //infinite loop to poll with 4 sec interval
         while (1==1){
-            PollNeighbours.pollNeighbours(readConf());
+            //print all polled hosts
+            System.out.println(PollNeighbours.pollNeighbours(readConf()));
             Thread.sleep(4000);
         }
 
     }
 
-
+    // returns know hosts form conf file
     public static String readConf() throws IOException {
         // create a map
         String result = "";
@@ -36,14 +39,8 @@ public class Server {
             String[] hosts = new String[0];
             for (Map.Entry<?, ?> entry : map.entrySet()) {
                 result = entry.getKey() + ":" + entry.getValue();
-                //System.out.println(entry.getKey() + ":" + entry.getValue());
-                //hosts = (entry.getValue().toString()).substring(1, entry.getValue().toString().length()-1).split(",");
             }
-           /* for(String host : hosts){
-                host = host.trim();
-                System.out.println(host);
-                //attemptConnection(host);
-            }*/
+
 
         } catch (Exception ex) {
             ex.printStackTrace();

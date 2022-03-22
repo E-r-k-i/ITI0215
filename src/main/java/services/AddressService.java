@@ -36,14 +36,15 @@ public class AddressService implements HttpHandler {
         }
     }
 
+    //tries to get iP
     private String getIp(HttpExchange exchange){
 
         String hostString = exchange.getRemoteAddress().getHostString();
         if (hostString.contains("0:0:0:0")){
-            hostString = "localhost:";
+            hostString = "localhost";
         }
         String ip = String.valueOf(port);
-        return hostString+ip;
+        return hostString+":"+ip;
     }
 
     private static String getRequest(HttpExchange exchange) throws IOException {
