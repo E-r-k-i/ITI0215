@@ -34,4 +34,8 @@ public class NodeUtils {
     private static String getNodeLogHeading(Node node) {
         return format("Node %s", createHttpUrl(node.getIp(), node.getPort()));
     }
+
+    public static String getNodeDatabaseName(String ip, String port) {
+        return format("%sledger%s", ip, port);
+    }
 }

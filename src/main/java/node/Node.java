@@ -5,6 +5,7 @@ import com.google.gson.stream.JsonReader;
 import com.sun.net.httpserver.HttpExchange;
 import lombok.Getter;
 import lombok.Setter;
+import persistence.PersistenceUtils;
 import util.HttpUtils;
 
 import java.io.BufferedReader;
@@ -18,9 +19,11 @@ import java.util.List;
 import java.util.Optional;
 
 import static java.lang.String.format;
+import static java.lang.String.valueOf;
 import static java.lang.Thread.sleep;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Comparator.comparing;
+import static persistence.PersistenceUtils.insertBlock;
 import static util.HttpUtils.GSON;
 import static util.HttpUtils.HTTP_GET;
 import static util.HttpUtils.HTTP_POST;
@@ -28,6 +31,7 @@ import static util.HttpUtils.RESPONSE_CODE_OK;
 import static util.HttpUtils.createHttpUrl;
 import static util.HttpUtils.createHttpUrlConnection;
 import static util.NodeUtils.addNodeLog;
+import static util.NodeUtils.getNodeDatabaseName;
 
 @Setter
 @Getter
@@ -82,11 +86,16 @@ public class Node {
             throw new RuntimeException("Block is invalid");
         }
         if (!blocks.contains(block)) {
-            blocks.add(block);
+            addBlockToLedger(block);
             return Optional.of(block);
         } else {
             return Optional.empty();
         }
+    }
+
+    private void addBlockToLedger(Block block) {
+        blocks.add(block);
+        insertBlock(getNodeDatabaseName(ip, port), block);
     }
 
     public void handleGetBlocks(HttpExchange exchange) throws IOException {
@@ -139,10 +148,15 @@ public class Node {
         var largest = result.stream().max(comparing(List::size));
         largest.ifPresent(largestList -> {
             if (largestList.size() > this.blocks.size()) {
-                this.blocks.clear();
-                this.blocks.addAll(largestList);
+                refreshLedger(largestList);
             }
         });
+    }
+
+    private void refreshLedger(List<Block> largestList) {
+        this.blocks.clear();
+        this.blocks.addAll(largestList);
+        largestList.forEach(b -> insertBlock(getNodeDatabaseName(ip, port), b));
     }
 
     private void handleSendBlockResponse(HttpURLConnection connection, Block block, Clone clone) throws IOException {
@@ -162,6 +176,11 @@ public class Node {
             result = content.toString();
         }
         return result;
+    }
+
+    public void populateBlockListWithDbData(List<Block> blockList) {
+        this.blocks.clear();
+        this.blocks.addAll(blockList);
     }
 
     private void synchronizeBlocks() {

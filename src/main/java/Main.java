@@ -12,7 +12,11 @@ import java.util.stream.Collectors;
 
 import static java.lang.Integer.parseInt;
 import static java.lang.String.valueOf;
+import static persistence.PersistenceUtils.createTableIfNotExists;
+import static persistence.PersistenceUtils.queryBlocks;
+import static util.HttpUtils.createHttpUrl;
 import static util.NodeUtils.getIpAddress;
+import static util.NodeUtils.getNodeDatabaseName;
 
 public class Main {
 
@@ -26,7 +30,11 @@ public class Main {
         // TODO: 22.03.2022 local and public ip address issue. Basically we need to use public ip, to make connections between local machine and remote servers
         var realIp = getIpAddress();
 
-        Node node = new Node(ip, valueOf(port));
+        createTableIfNotExists(getNodeDatabaseName(realIp, valueOf(port)));
+
+        Node node = new Node(realIp, valueOf(port));
+        node.populateBlockListWithDbData(queryBlocks(getNodeDatabaseName(realIp, valueOf(port))));
+
 
         List<Clone> possibleClones = List.of(new Clone(realIp, "8500"), new Clone(realIp, "9000"), new Clone(realIp, "9001"));
         node.setClones(possibleClones.stream().filter(clone -> !clone.getPort().equals(args[0])).collect(Collectors.toList()));
