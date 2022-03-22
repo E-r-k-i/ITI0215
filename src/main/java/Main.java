@@ -23,6 +23,7 @@ public class Main {
             port = parseInt(args[0]);
         }
 
+        // TODO: 22.03.2022 local and public ip address issue. Basically we need to use public ip, to make connections between local machine and remote servers
         var realIp = getIpAddress();
 
         Node node = new Node(ip, valueOf(port));

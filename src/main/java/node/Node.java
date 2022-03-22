@@ -17,6 +17,7 @@ import java.net.HttpURLConnection;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import static java.lang.String.format;
 import static java.lang.Thread.sleep;
@@ -62,17 +63,28 @@ public class Node {
                 os.write(payload);
             }
             addNodeLog(this, format("received block: %s", block));
-            sendBlockToClones(block);
+            // TODO: 22.03.2022 is it needed here to send blocks away? Maybe do it in some Thread task...
+            block.ifPresent(b -> {
+                try {
+                    sendBlockToClones(b);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            });
         }
     }
 
-    private Block serializeAndAddBlockIfValid(JsonReader reader) {
+    private Optional<Block> serializeAndAddBlockIfValid(JsonReader reader) {
         Block block = GSON.fromJson(reader, Block.class);
         if (block == null || block.getContent() == null) {
             throw new RuntimeException("Block is invalid");
         }
-        if (!blocks.contains(block)) blocks.add(block);
-        return block;
+        if (!blocks.contains(block)) {
+            blocks.add(block);
+            return Optional.of(block);
+        } else {
+            return Optional.empty();
+        }
     }
 
     public void handleGetBlocks(HttpExchange exchange) throws IOException {
