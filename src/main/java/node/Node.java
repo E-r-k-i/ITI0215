@@ -5,7 +5,7 @@ import com.google.gson.stream.JsonReader;
 import com.sun.net.httpserver.HttpExchange;
 import lombok.Getter;
 import lombok.Setter;
-import persistence.PersistenceUtils;
+import util.HashUtils;
 import util.HttpUtils;
 
 import java.io.BufferedReader;
@@ -19,7 +19,6 @@ import java.util.List;
 import java.util.Optional;
 
 import static java.lang.String.format;
-import static java.lang.String.valueOf;
 import static java.lang.Thread.sleep;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Comparator.comparing;
@@ -57,8 +56,21 @@ public class Node {
         addNodeLog(this, "started");
     }
 
+    public void handleTransaction(HttpExchange exchange) throws IOException {
+        try (InputStream requestBody = exchange.getRequestBody()) {
+            var reader = new JsonReader(new InputStreamReader(requestBody));
+            var block = serializeAndAddBlockFromTransactionIfValid(reader);
+            try (OutputStream os = exchange.getResponseBody()) {
+                byte[] payload = SUCCESS.getBytes();
+                exchange.sendResponseHeaders(HttpUtils.RESPONSE_CODE_OK, payload.length);
+                os.write(payload);
+            }
+            addNodeLog(this, format("received transaction and created a block: %s", block));
+            block.ifPresent(this::sendBlockToClonesIfPresent);
+        }
+    }
+
     public void handlePush(HttpExchange exchange) throws IOException {
-        addNodeLog(this, "received http request");
         try (InputStream requestBody = exchange.getRequestBody()) {
             var reader = new JsonReader(new InputStreamReader(requestBody));
             var block = serializeAndAddBlockIfValid(reader);
@@ -76,13 +88,27 @@ public class Node {
         try {
             sendBlockToClones(block);
         } catch (IOException e) {
-            e.printStackTrace();
+            addNodeLog(this, format("Error sending block to clone: [%s]", e.getMessage()));
+        }
+    }
+
+    private Optional<Block> serializeAndAddBlockFromTransactionIfValid(JsonReader reader) {
+        Block block = GSON.fromJson(reader, Block.class);
+        if (block.getTransaction() == null) {
+            throw new RuntimeException("Transaction is missing");
+        }
+        block.setHash(HashUtils.hashBlock(block.getTransaction()));
+        if (!blocks.contains(block)) {
+            addBlockToLedger(block);
+            return Optional.of(block);
+        } else {
+            return Optional.empty();
         }
     }
 
     private Optional<Block> serializeAndAddBlockIfValid(JsonReader reader) {
         Block block = GSON.fromJson(reader, Block.class);
-        if (block == null || block.getTransaction() == null) {
+        if (block == null || block.getHash() == null || block.getTransaction() == null) {
             throw new RuntimeException("Block is invalid");
         }
         if (!blocks.contains(block)) {
@@ -140,6 +166,7 @@ public class Node {
                 List<Block> blocks = List.of(receivedNodes);
                 result.add(blocks);
             } catch (Exception e) {
+                addNodeLog(this, format("Error getting block list: [%s]", e.getMessage()));
                 result.add(new ArrayList<>());
             }
         }

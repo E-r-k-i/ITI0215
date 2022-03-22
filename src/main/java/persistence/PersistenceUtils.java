@@ -9,17 +9,16 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 import static java.lang.String.format;
 
 public class PersistenceUtils {
 
     private static final String CREATE_TABLE_SQL = "CREATE TABLE IF NOT EXISTS block (\n"
-            + " id text PRIMARY KEY,\n"
-            + " transaction_content text UNIQUE NOT NULL\n"
+            + " hash text PRIMARY KEY,\n"
+            + " transaction_content text NOT NULL\n"
             + ");";
-    private static final String INSERT_SQL = "INSERT INTO block(id, transaction_content) VALUES(?,?)";
+    private static final String INSERT_SQL = "INSERT INTO block(hash, transaction_content) VALUES(?,?)";
     private static final String SELECT_ALL_SQL = "SELECT * FROM block";
 
     public static void createTableIfNotExists(String databaseName) {
@@ -36,7 +35,7 @@ public class PersistenceUtils {
         try {
             var conn = getConnection(databaseName);
             var stmt = conn.prepareStatement(INSERT_SQL);
-            stmt.setString(1, UUID.randomUUID().toString());
+            stmt.setString(1, block.getHash());
             stmt.setString(2, block.getTransaction());
             stmt.executeUpdate();
         } catch (Exception e) {
@@ -51,7 +50,7 @@ public class PersistenceUtils {
             ResultSet rs    = stmt.executeQuery(SELECT_ALL_SQL);
             List<Block> result = new ArrayList<>();
             while (rs.next()) {
-                result.add(new Block(rs.getString("transaction_content")));
+                result.add(new Block(rs.getString("hash"), rs.getString("transaction_content")));
             }
             return result;
         } catch (Exception e) {

@@ -14,7 +14,6 @@ import static java.lang.Integer.parseInt;
 import static java.lang.String.valueOf;
 import static persistence.PersistenceUtils.createTableIfNotExists;
 import static persistence.PersistenceUtils.queryBlocks;
-import static util.HttpUtils.createHttpUrl;
 import static util.NodeUtils.getIpAddress;
 import static util.NodeUtils.getNodeDatabaseName;
 
@@ -43,6 +42,7 @@ public class Main {
         server.createContext("/addr", new AddressService(port));
         server.createContext("/blocks/push", node::handlePush);
         server.createContext("/blocks/get", node::handleGetBlocks);
+        server.createContext("/transaction/push", node::handleTransaction);
         server.setExecutor(Executors.newCachedThreadPool());
         server.start();
     }
