@@ -36,7 +36,7 @@ public class Node {
     private static final String SUCCESS = "success";
     private static final String FAILURE = "failure";
     private static final Long SLEEP_TIME = 10000L;
-    private static final Long SYNC_SLEEP_TIME = 10000L;
+    private static final Long SYNC_SLEEP_TIME = 25000L;
 
     private final String ip;
     private final String port;
@@ -64,13 +64,15 @@ public class Node {
                 os.write(payload);
             }
             addNodeLog(this, format("received block: %s", block));
-            block.ifPresent(b -> {
-                try {
-                    sendBlockToClones(b);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            });
+            block.ifPresent(this::sendBlockToClonesIfPresent);
+        }
+    }
+
+    private void sendBlockToClonesIfPresent(Block block) {
+        try {
+            sendBlockToClones(block);
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 

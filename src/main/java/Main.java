@@ -28,7 +28,7 @@ public class Main {
 
         Node node = new Node(ip, valueOf(port));
 
-        List<Clone> possibleClones = List.of(new Clone(ip, "8500"), new Clone(ip, "9000"), new Clone(ip, "9001"));
+        List<Clone> possibleClones = List.of(new Clone(realIp, "8500"), new Clone(realIp, "9000"), new Clone(realIp, "9001"));
         node.setClones(possibleClones.stream().filter(clone -> !clone.getPort().equals(args[0])).collect(Collectors.toList()));
 
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
