@@ -139,6 +139,8 @@ public class Node {
                 Block[] receivedNodes = GSON.fromJson(reader, Block[].class);
                 List<Block> blocks = List.of(receivedNodes);
                 result.add(blocks);
+            } catch (Exception e) {
+                result.add(new ArrayList<>());
             }
         }
         return result;

@@ -17,7 +17,7 @@ public class PersistenceUtils {
 
     private static final String CREATE_TABLE_SQL = "CREATE TABLE IF NOT EXISTS block (\n"
             + " id text PRIMARY KEY,\n"
-            + " transaction_content text NOT NULL\n"
+            + " transaction_content text UNIQUE NOT NULL\n"
             + ");";
     private static final String INSERT_SQL = "INSERT INTO block(id, transaction_content) VALUES(?,?)";
     private static final String SELECT_ALL_SQL = "SELECT * FROM block";
