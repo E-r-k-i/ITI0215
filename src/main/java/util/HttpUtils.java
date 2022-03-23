@@ -20,10 +20,8 @@ public class HttpUtils {
     public static final String CONTENT_TYPE = "Content-Type";
     public static final String ACCEPT = "Accept";
     public static final String APPLICATION_JSON = "application/json";
-    public static final String TEXT_PLAIN = "text/plain";
     public static final String CONTENT_LENGTH = "Content-Length";
     public static final int RESPONSE_CODE_OK = 200;
-    public static final int RESPONSE_CODE_BAD_REQUEST = 400;
 
     public static String createHttpUrl(String ip, String port) {
         return format("http://%s:%s", ip, port);
