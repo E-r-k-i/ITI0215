@@ -1,5 +1,11 @@
 # Distributed Ledger
 
+## Main entity
+
+```
+Block { hash: "string", transaction: "string" }
+```
+
 ## /clones
 
 Get clones list from node
@@ -9,8 +15,10 @@ HTTP method: GET
 Request parameters:
 - ip = requester node's ip
 - port = requester node's port
-  Response body: List<Clone>
-  Content-Type: application/json
+  
+Response body: List - Clones
+
+Content-Type: application/json
 
 ## /transaction/push
 
@@ -40,6 +48,6 @@ Sends node's block list to receiver. Used to synchronize ledger
 
 HTTP method: GET
 
-Response body: List<Block>
+Response body: List - Blocks
 
 Content-Type: application/json
