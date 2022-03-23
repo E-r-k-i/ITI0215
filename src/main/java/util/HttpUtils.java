@@ -24,8 +24,10 @@ public class HttpUtils {
     public static final int RESPONSE_CODE_OK = 200;
     public static final int RESPONSE_CODE_BAD_REQUEST = 400;
 
+    private static final String URL_FORMAT = "http://%s:%s";
+
     public static String createHttpUrl(String ip, String port) {
-        return format("http://%s:%s", ip, port);
+        return format(URL_FORMAT, ip, port);
     }
 
     public static String getUrlParams(Map<String, String> params) {
