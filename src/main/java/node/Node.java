@@ -1,6 +1,6 @@
 package node;
 
-import address.Clone;
+import clone.Clone;
 import block.Block;
 import com.google.gson.stream.JsonReader;
 import com.sun.net.httpserver.HttpExchange;
@@ -9,13 +9,12 @@ import lombok.Setter;
 import util.HashUtils;
 import util.HttpUtils;
 
-import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.net.HttpURLConnection;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 
@@ -23,6 +22,7 @@ import static java.lang.String.format;
 import static java.lang.Thread.sleep;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Comparator.comparing;
+import static java.util.stream.Collectors.toList;
 import static persistence.PersistenceUtils.deleteAllBLocks;
 import static persistence.PersistenceUtils.insertBlock;
 import static util.HttpUtils.GSON;
@@ -31,6 +31,9 @@ import static util.HttpUtils.HTTP_POST;
 import static util.HttpUtils.RESPONSE_CODE_OK;
 import static util.HttpUtils.createHttpUrl;
 import static util.HttpUtils.createHttpUrlConnection;
+import static util.NodeUtils.BLOCKS_GET_PATH;
+import static util.NodeUtils.BLOCKS_PUSH_PATH;
+import static util.NodeUtils.CLONES_PATH;
 import static util.NodeUtils.addNodeLog;
 import static util.NodeUtils.cloneEqualsNode;
 import static util.NodeUtils.getNodeDatabaseName;
@@ -41,7 +44,8 @@ public class Node {
 
     private static final String SUCCESS = "success";
     private static final String FAILURE = "failure";
-    private static final Long SLEEP_TIME = 10000L;
+    private static final Long SLEEP_TIME = 6000L;
+    private static final Long CLONE_DISCOVERY_TIME = 10000L;
     private static final Long SYNC_SLEEP_TIME = 25000L;
 
     private final String ip;
@@ -55,11 +59,12 @@ public class Node {
 
         logBlocks();
         logClones();
+        findClones();
         synchronizeBlocks();
         addNodeLog(this, "started");
     }
 
-    public void handleTransaction(HttpExchange exchange) throws IOException {
+    public void handlePushTransaction(HttpExchange exchange) throws IOException {
         try (InputStream requestBody = exchange.getRequestBody()) {
             var reader = new JsonReader(new InputStreamReader(requestBody));
             var block = serializeAndAddBlockFromTransactionIfValid(reader);
@@ -73,7 +78,7 @@ public class Node {
         }
     }
 
-    public void handlePush(HttpExchange exchange) throws IOException {
+    public void handlePushBlock(HttpExchange exchange) throws IOException {
         try (InputStream requestBody = exchange.getRequestBody()) {
             var reader = new JsonReader(new InputStreamReader(requestBody));
             var block = serializeAndAddBlockIfValid(reader);
@@ -84,6 +89,14 @@ public class Node {
             }
             addNodeLog(this, format("received block: %s", block));
             block.ifPresent(this::sendBlockToClonesIfPresent);
+        }
+    }
+
+    public void handleGetClones(HttpExchange exchange) throws IOException {
+        var response = GSON.toJson(clones);
+        exchange.sendResponseHeaders(RESPONSE_CODE_OK, response.getBytes().length);
+        try (OutputStream outputStream = exchange.getResponseBody()) {
+            outputStream.write(response.getBytes(UTF_8));
         }
     }
 
@@ -128,7 +141,6 @@ public class Node {
     }
 
     public void handleGetBlocks(HttpExchange exchange) throws IOException {
-        addNodeLog(this, "received http request");
         var response = GSON.toJson(blocks);
         exchange.sendResponseHeaders(RESPONSE_CODE_OK, response.getBytes().length);
         try (OutputStream outputStream = exchange.getResponseBody()) {
@@ -144,11 +156,10 @@ public class Node {
             var url = createHttpUrl(clone.getIp(), clone.getPort());
             addNodeLog(this, format("sending block to %s", url));
             byte[] payload = GSON.toJson(block).getBytes(UTF_8);
-            var connection = createHttpUrlConnection(HTTP_POST, url + "/blocks/push", String.valueOf(payload.length));
+            var connection = createHttpUrlConnection(HTTP_POST, url + BLOCKS_PUSH_PATH, String.valueOf(payload.length));
             try (OutputStream os = connection.getOutputStream()) {
                 os.write(payload, 0, payload.length);
             }
-            handleSendBlockResponse(connection, block, clone);
         }
     }
 
@@ -165,8 +176,8 @@ public class Node {
                 continue;
             }
             var url = createHttpUrl(clone.getIp(), clone.getPort());
-            addNodeLog(this, format("querying block from clone %s", url));
-            var connection = createHttpUrlConnection(HTTP_GET, url + "/blocks/get");
+            addNodeLog(this, format("querying blocks from clone %s", url));
+            var connection = createHttpUrlConnection(HTTP_GET, url + BLOCKS_GET_PATH);
             try (InputStream inputStream = connection.getInputStream()) {
                 JsonReader reader = new JsonReader(new InputStreamReader(inputStream, UTF_8));
                 Block[] receivedNodes = GSON.fromJson(reader, Block[].class);
@@ -174,6 +185,39 @@ public class Node {
                 result.add(blocks);
             } catch (Exception e) {
                 addNodeLog(this, format("Error getting block list: [%s]", e.getMessage()));
+                result.add(new ArrayList<>());
+            }
+        }
+        return result;
+    }
+
+    private void getClonesFromClones() throws IOException {
+        addNodeLog(this, "querying clones from all clones");
+        List<List<Clone>> result = getClonesListsFromClones();
+        setNewClonesList(result);
+    }
+
+    private void setNewClonesList(List<List<Clone>> clones) {
+        List<Clone> result = clones.stream().flatMap(List::stream).collect(toList());
+        setClones(new ArrayList<>(new HashSet<>(result)));
+    }
+
+    private List<List<Clone>> getClonesListsFromClones() throws IOException {
+        List<List<Clone>> result = new ArrayList<>();
+        for (Clone clone: clones) {
+            if (cloneEqualsNode(clone, this)) {
+                continue;
+            }
+            var url = createHttpUrl(clone.getIp(), clone.getPort());
+            addNodeLog(this, format("querying clones from clone %s", url));
+            var connection = createHttpUrlConnection(HTTP_GET, url + CLONES_PATH);
+            try (InputStream inputStream = connection.getInputStream()) {
+                JsonReader reader = new JsonReader(new InputStreamReader(inputStream, UTF_8));
+                Clone[] receivedClones = GSON.fromJson(reader, Clone[].class);
+                List<Clone> clones = List.of(receivedClones);
+                result.add(clones);
+            } catch (Exception e) {
+                addNodeLog(this, format("Error getting clone list: [%s]", e.getMessage()));
                 result.add(new ArrayList<>());
             }
         }
@@ -196,28 +240,23 @@ public class Node {
         largestList.forEach(b -> insertBlock(getNodeDatabaseName(ip, port), b));
     }
 
-    private void handleSendBlockResponse(HttpURLConnection connection, Block block, Clone clone) throws IOException {
-        var cloneUrl = createHttpUrl(clone.getIp(), clone.getPort());
-        var message = format(getResponse(connection).equals(SUCCESS) ? "successfully sent %s to %s" : "error sending %S to %s", block, cloneUrl);
-        addNodeLog(this, message);
-    }
-
-    private String getResponse(HttpURLConnection connection) throws IOException {
-        String result;
-        try (BufferedReader in = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
-            String inputLine;
-            StringBuilder content = new StringBuilder();
-            while ((inputLine = in.readLine()) != null) {
-                content.append(inputLine);
-            }
-            result = content.toString();
-        }
-        return result;
-    }
-
     public void populateBlockListWithDbData(List<Block> blockList) {
         this.blocks.clear();
         this.blocks.addAll(blockList);
+    }
+
+    private void findClones() {
+        Thread thread = new Thread(() -> {
+            while (true) {
+                try {
+                    sleep(CLONE_DISCOVERY_TIME);
+                    getClonesFromClones();
+                } catch (InterruptedException | IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+        thread.start();
     }
 
     private void synchronizeBlocks() {

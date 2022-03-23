@@ -1,6 +1,6 @@
 package util;
 
-import address.Clone;
+import clone.Clone;
 import node.Node;
 
 import java.net.InetAddress;
@@ -10,6 +10,11 @@ import static java.lang.String.format;
 import static util.HttpUtils.createHttpUrl;
 
 public class NodeUtils {
+
+    public static final String CLONES_PATH = "/clones";
+    public static final String BLOCKS_PUSH_PATH = "/blocks/push";
+    public static final String BLOCKS_GET_PATH = "/blocks/get";
+    public static final String TRANSACTION_PUSH_PATH = "/transaction/push";
 
     public static String getIpAddress() throws UnknownHostException {
         String ip;
