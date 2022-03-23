@@ -11,7 +11,6 @@ public class Main {
         if (args.length > 0) {
             port = parseInt(args[0]);
         }
-        new Server(port);
     }
 
 }
