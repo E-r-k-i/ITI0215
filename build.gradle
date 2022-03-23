@@ -4,7 +4,6 @@ plugins {
 
 group = 'ee.taltech'
 version = '0.0.1-SNAPSHOT'
-sourceCompatibility = '11'
 
 repositories {
 	mavenCentral()
@@ -16,5 +15,5 @@ dependencies {
 	implementation group: 'org.xerial', name: 'sqlite-jdbc', version: '3.7.2'
 
 	compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.18'
-	annotationProcessor 'org.projectlombok:lombok:1.18.16'
+	annotationProcessor 'org.projectlombok:lombok:1.18.22'
 }

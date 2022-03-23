@@ -20,8 +20,6 @@ import static util.NodeUtils.getNodeDatabaseName;
 
 public class Main {
 
-
-
     public static void main(String[] args) throws IOException {
         var port = "8500";
         if (args.length > 0) {
@@ -37,7 +35,7 @@ public class Main {
 
         // node discovery not implemented yet todo: add
         //List<Clone> possibleClones = List.of(new Clone(ip, "8500"), new Clone(ip, "9000"), new Clone(ip, "9001"));
-        node.setClones(Stream.of(CloneReader.read(node)).collect(toList()));
+        node.setInitialClones(Stream.of(CloneReader.read(node)).collect(toList()));
 
         HttpServer server = HttpServer.create(new InetSocketAddress(parseInt(port)), 0);
         server.createContext(CLONES_PATH, node::handleGetClones);

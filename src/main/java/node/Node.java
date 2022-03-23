@@ -14,8 +14,9 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static java.lang.String.format;
@@ -31,12 +32,17 @@ import static util.HttpUtils.HTTP_POST;
 import static util.HttpUtils.RESPONSE_CODE_OK;
 import static util.HttpUtils.createHttpUrl;
 import static util.HttpUtils.createHttpUrlConnection;
+import static util.HttpUtils.queryToMap;
 import static util.NodeUtils.BLOCKS_GET_PATH;
 import static util.NodeUtils.BLOCKS_PUSH_PATH;
 import static util.NodeUtils.CLONES_PATH;
+import static util.NodeUtils.IP_FIELD;
+import static util.NodeUtils.PORT_FIELD;
 import static util.NodeUtils.addNodeLog;
 import static util.NodeUtils.cloneEqualsNode;
 import static util.NodeUtils.getNodeDatabaseName;
+import static util.NodeUtils.getNodeQueryParams;
+import static util.NodeUtils.validateClone;
 
 @Setter
 @Getter
@@ -46,12 +52,12 @@ public class Node {
     private static final String FAILURE = "failure";
     private static final Long SLEEP_TIME = 6000L;
     private static final Long CLONE_DISCOVERY_TIME = 10000L;
-    private static final Long SYNC_SLEEP_TIME = 25000L;
+    private static final Long SYNC_SLEEP_TIME = 20000L;
 
     private final String ip;
     private final String port;
     private final List<Block> blocks = new ArrayList<>();
-    private List<Clone> clones = new ArrayList<>();
+    private final List<Clone> clones = new ArrayList<>();
 
     public Node(String ip, String port) {
         this.ip = ip;
@@ -95,6 +101,9 @@ public class Node {
     public void handleGetClones(HttpExchange exchange) throws IOException {
         var response = GSON.toJson(clones);
         exchange.sendResponseHeaders(RESPONSE_CODE_OK, response.getBytes().length);
+        Map<String, String> requesterIpAndPort = queryToMap(exchange.getRequestURI().getQuery());
+        Clone clone = new Clone(requesterIpAndPort.get(IP_FIELD), requesterIpAndPort.get(PORT_FIELD));
+        if (validateClone(clone) && !clones.contains(clone)) clones.add(clone);
         try (OutputStream outputStream = exchange.getResponseBody()) {
             outputStream.write(response.getBytes(UTF_8));
         }
@@ -197,9 +206,17 @@ public class Node {
         setNewClonesList(result);
     }
 
-    private void setNewClonesList(List<List<Clone>> clones) {
-        List<Clone> result = clones.stream().flatMap(List::stream).collect(toList());
-        setClones(new ArrayList<>(new HashSet<>(result)));
+    private void setNewClonesList(List<List<Clone>> receivedClones) {
+        List<Clone> result = receivedClones.stream().flatMap(List::stream).collect(toList());
+        result.forEach(clone -> {
+            if (!clones.contains(clone)) {
+                clones.add(clone);
+            }
+        });
+    }
+
+    public void setInitialClones(List<Clone> initialClones) {
+        clones.addAll(initialClones);
     }
 
     private List<List<Clone>> getClonesListsFromClones() throws IOException {
@@ -210,7 +227,7 @@ public class Node {
             }
             var url = createHttpUrl(clone.getIp(), clone.getPort());
             addNodeLog(this, format("querying clones from clone %s", url));
-            var connection = createHttpUrlConnection(HTTP_GET, url + CLONES_PATH);
+            var connection = createHttpUrlConnection(HTTP_GET, url + CLONES_PATH + "?" + getNodeQueryParams(this));
             try (InputStream inputStream = connection.getInputStream()) {
                 JsonReader reader = new JsonReader(new InputStreamReader(inputStream, UTF_8));
                 Clone[] receivedClones = GSON.fromJson(reader, Clone[].class);
