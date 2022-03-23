@@ -1,6 +1,7 @@
 
 import com.sun.net.httpserver.HttpServer;
 import node.Node;
+import node.NodeProcessHandler;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -31,9 +32,9 @@ public class Main {
         createTableIfNotExists(getNodeDatabaseName(ip, port));
 
         Node node = new Node(ip, port);
+        new NodeProcessHandler(node);
         node.populateBlockListWithDbData(queryBlocks(getNodeDatabaseName(ip, port)));
 
-        // node discovery not implemented yet todo: add
         //List<Clone> possibleClones = List.of(new Clone(ip, "8500"), new Clone(ip, "9000"), new Clone(ip, "9001"));
         node.setInitialClones(Stream.of(CloneReader.read(node)).collect(toList()));
 

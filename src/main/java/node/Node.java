@@ -7,7 +7,7 @@ import com.sun.net.httpserver.HttpExchange;
 import lombok.Getter;
 import lombok.Setter;
 import util.HashUtils;
-import util.HttpUtils;
+import util.ResponseDataDto;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -19,7 +19,6 @@ import java.util.Map;
 import java.util.Optional;
 
 import static java.lang.String.format;
-import static java.lang.Thread.sleep;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Comparator.comparing;
 import static java.util.stream.Collectors.toList;
@@ -28,9 +27,11 @@ import static persistence.PersistenceUtils.insertBlock;
 import static util.HttpUtils.GSON;
 import static util.HttpUtils.HTTP_GET;
 import static util.HttpUtils.HTTP_POST;
+import static util.HttpUtils.RESPONSE_CODE_BAD_REQUEST;
 import static util.HttpUtils.RESPONSE_CODE_OK;
 import static util.HttpUtils.createHttpUrl;
 import static util.HttpUtils.createHttpUrlConnection;
+import static util.HttpUtils.getResponseDataDto;
 import static util.HttpUtils.queryToMap;
 import static util.NodeUtils.BLOCKS_GET_PATH;
 import static util.NodeUtils.BLOCKS_PUSH_PATH;
@@ -49,9 +50,6 @@ public class Node {
 
     private static final String SUCCESS = "success";
     private static final String FAILURE = "failure";
-    private static final Long SLEEP_TIME = 6000L;
-    private static final Long CLONE_DISCOVERY_TIME = 10000L;
-    private static final Long SYNC_SLEEP_TIME = 20000L;
 
     private final String ip;
     private final String port;
@@ -62,21 +60,24 @@ public class Node {
         this.ip = ip;
         this.port = port;
 
-        logBlocks();
-        logClones();
-        findClones();
-        synchronizeBlocks();
         addNodeLog(this, "started");
     }
 
     public void handlePushTransaction(HttpExchange exchange) throws IOException {
         try (InputStream requestBody = exchange.getRequestBody()) {
             var reader = new JsonReader(new InputStreamReader(requestBody));
-            var block = serializeAndAddBlockFromTransactionIfValid(reader);
+            Optional<Block> block;
+            ResponseDataDto responseData;
+            try {
+                block = serializeAndAddBlockFromTransactionIfValid(reader);
+                responseData = getResponseDataDto(SUCCESS, RESPONSE_CODE_OK);
+            } catch (Exception e) {
+                block = Optional.empty();
+                responseData = getResponseDataDto(FAILURE + ": " + e.getMessage(), RESPONSE_CODE_BAD_REQUEST);
+            }
             try (OutputStream os = exchange.getResponseBody()) {
-                byte[] payload = SUCCESS.getBytes();
-                exchange.sendResponseHeaders(HttpUtils.RESPONSE_CODE_OK, payload.length);
-                os.write(payload);
+                exchange.sendResponseHeaders(responseData.getCode(), responseData.getLen());
+                os.write(responseData.getPayload());
             }
             addNodeLog(this, format("received transaction and created a block: %s", block));
             block.ifPresent(this::sendBlockToClonesIfPresent);
@@ -86,13 +87,20 @@ public class Node {
     public void handlePushBlock(HttpExchange exchange) throws IOException {
         try (InputStream requestBody = exchange.getRequestBody()) {
             var reader = new JsonReader(new InputStreamReader(requestBody));
-            var block = serializeAndAddBlockIfValid(reader);
-            try (OutputStream os = exchange.getResponseBody()) {
-                byte[] payload = SUCCESS.getBytes();
-                exchange.sendResponseHeaders(HttpUtils.RESPONSE_CODE_OK, payload.length);
-                os.write(payload);
+            Optional<Block> block;
+            ResponseDataDto responseData;
+            try {
+                block = serializeAndAddBlockIfValid(reader);
+                responseData = getResponseDataDto(SUCCESS, RESPONSE_CODE_OK);
+            } catch (Exception e) {
+                block = Optional.empty();
+                responseData = getResponseDataDto(FAILURE + ": " + e.getMessage(), RESPONSE_CODE_BAD_REQUEST);
             }
-            addNodeLog(this, format("received block: %s", block));
+            try (OutputStream os = exchange.getResponseBody()) {
+                exchange.sendResponseHeaders(responseData.getCode(), responseData.getLen());
+                os.write(responseData.getPayload());
+            }
+            addNodeLog(this, format("received block and sent further: %s", block));
             block.ifPresent(this::sendBlockToClonesIfPresent);
         }
     }
@@ -108,6 +116,35 @@ public class Node {
         }
     }
 
+    public void handleGetBlocks(HttpExchange exchange) throws IOException {
+        var response = GSON.toJson(blocks);
+        exchange.sendResponseHeaders(RESPONSE_CODE_OK, response.getBytes().length);
+        try (OutputStream outputStream = exchange.getResponseBody()) {
+            outputStream.write(response.getBytes(UTF_8));
+        }
+    }
+
+    public void getBlocksFromClones() throws IOException {
+        addNodeLog(this, "querying blocks from all clones");
+        List<List<Block>> result = getBlockListsFromClones();
+        replaceBlocksIfNeeded(result);
+    }
+
+    public void getClonesFromClones() throws IOException {
+        addNodeLog(this, "querying clones from all clones");
+        List<List<Clone>> result = getClonesListsFromClones();
+        setNewClonesList(result);
+    }
+
+    public void setInitialClones(List<Clone> initialClones) {
+        clones.addAll(initialClones);
+    }
+
+    public void populateBlockListWithDbData(List<Block> blockList) {
+        this.blocks.clear();
+        this.blocks.addAll(blockList);
+    }
+
     private void sendBlockToClonesIfPresent(Block block) {
         try {
             sendBlockToClones(block);
@@ -118,8 +155,8 @@ public class Node {
 
     private Optional<Block> serializeAndAddBlockFromTransactionIfValid(JsonReader reader) {
         Block block = GSON.fromJson(reader, Block.class);
-        if (block.getTransaction() == null) {
-            throw new RuntimeException("Transaction is missing");
+        if (block == null || block.getTransaction() == null) {
+            throw new RuntimeException("Transaction is invalid");
         }
         block.setHash(HashUtils.hashBlock(block.getTransaction()));
         if (!blocks.contains(block)) {
@@ -148,14 +185,6 @@ public class Node {
         insertBlock(getNodeDatabaseName(ip, port), block);
     }
 
-    public void handleGetBlocks(HttpExchange exchange) throws IOException {
-        var response = GSON.toJson(blocks);
-        exchange.sendResponseHeaders(RESPONSE_CODE_OK, response.getBytes().length);
-        try (OutputStream outputStream = exchange.getResponseBody()) {
-            outputStream.write(response.getBytes(UTF_8));
-        }
-    }
-
     private void sendBlockToClones(Block block) throws IOException {
         for (Clone clone: clones) {
             if (cloneEqualsNode(clone, this)) {
@@ -169,12 +198,6 @@ public class Node {
                 os.write(payload, 0, payload.length);
             }
         }
-    }
-
-    private void getBlocksFromClones() throws IOException {
-        addNodeLog(this, "querying blocks from all clones");
-        List<List<Block>> result = getBlockListsFromClones();
-        replaceBlocksIfNeeded(result);
     }
 
     private List<List<Block>> getBlockListsFromClones() throws IOException {
@@ -199,12 +222,6 @@ public class Node {
         return result;
     }
 
-    private void getClonesFromClones() throws IOException {
-        addNodeLog(this, "querying clones from all clones");
-        List<List<Clone>> result = getClonesListsFromClones();
-        setNewClonesList(result);
-    }
-
     private void setNewClonesList(List<List<Clone>> receivedClones) {
         List<Clone> result = receivedClones.stream().flatMap(List::stream).collect(toList());
         result.forEach(clone -> {
@@ -212,10 +229,6 @@ public class Node {
                 clones.add(clone);
             }
         });
-    }
-
-    public void setInitialClones(List<Clone> initialClones) {
-        clones.addAll(initialClones);
     }
 
     private List<List<Clone>> getClonesListsFromClones() throws IOException {
@@ -254,66 +267,5 @@ public class Node {
         this.blocks.addAll(largestList);
         deleteAllBLocks(getNodeDatabaseName(ip, port));
         largestList.forEach(b -> insertBlock(getNodeDatabaseName(ip, port), b));
-    }
-
-    public void populateBlockListWithDbData(List<Block> blockList) {
-        this.blocks.clear();
-        this.blocks.addAll(blockList);
-    }
-
-    private void findClones() {
-        Thread thread = new Thread(() -> {
-            while (true) {
-                try {
-                    sleep(CLONE_DISCOVERY_TIME);
-                    getClonesFromClones();
-                } catch (InterruptedException | IOException e) {
-                    e.printStackTrace();
-                }
-            }
-        });
-        thread.start();
-    }
-
-    private void synchronizeBlocks() {
-        Thread thread = new Thread(() -> {
-            while (true) {
-                try {
-                    sleep(SYNC_SLEEP_TIME);
-                    getBlocksFromClones();
-                } catch (InterruptedException | IOException e) {
-                    e.printStackTrace();
-                }
-            }
-        });
-        thread.start();
-    }
-
-    private void logBlocks() {
-        Thread thread = new Thread(() -> {
-            while (true) {
-                try {
-                    sleep(SLEEP_TIME);
-                    addNodeLog(this, format("blocks: %s", blocks));
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
-        });
-        thread.start();
-    }
-
-    private void logClones() {
-        Thread thread = new Thread(() -> {
-            while (true) {
-                try {
-                    sleep(SLEEP_TIME);
-                    addNodeLog(this, format("clones: %s", clones));
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
-        });
-        thread.start();
     }
 }

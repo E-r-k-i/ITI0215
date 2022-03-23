@@ -22,6 +22,7 @@ public class HttpUtils {
     public static final String APPLICATION_JSON = "application/json";
     public static final String CONTENT_LENGTH = "Content-Length";
     public static final int RESPONSE_CODE_OK = 200;
+    public static final int RESPONSE_CODE_BAD_REQUEST = 400;
 
     public static String createHttpUrl(String ip, String port) {
         return format("http://%s:%s", ip, port);
@@ -80,5 +81,14 @@ public class HttpUtils {
         connection.setRequestProperty(CONTENT_LENGTH, contentLength);
         connection.setDoOutput(true);
         return connection;
+    }
+
+    public static ResponseDataDto getResponseDataDto(String message, int code) {
+        var data = new ResponseDataDto();
+        data.setCode(code);
+        byte[] payload = message.getBytes();
+        data.setPayload(payload);
+        data.setLen(payload.length);
+        return data;
     }
 }

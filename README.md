@@ -15,11 +15,12 @@ Request parameters:
 ## /transaction/push
 
 Push transaction to node. Then it turns to block and is added to ledger. 
+
 HTTP method: POST
 
 Request Body: {"transaction": "string"}
 
-Response Body: Text explaining status ("success"/"failure")
+Response Body: Text explaining status ("success"/"failure: message")
 
 Content-Type: application/json
 
@@ -31,7 +32,7 @@ HTTP method: POST
 
 Request Body: {"hash": "string", "transaction": "string"}
 
-Response Body: No body
+Response Body: Text explaining status ("success"/"failure: message")
 
 ## /blocks/get
 

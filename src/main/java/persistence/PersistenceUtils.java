@@ -24,6 +24,10 @@ public class PersistenceUtils {
     private static final String HASH_COLUMN = "hash";
     private static final String TRANSACTION_CONTENT_COLUMN = "transaction_content";
 
+    private static final String CLASS_FOR_NAME = "org.sqlite.JDBC";
+    private static final String CONNECTION_URL_START = "jdbc:sqlite:";
+    private static final String DATABASE_NAME_FORMAT = "\\%s.db";
+
     public static void createTableIfNotExists(String databaseName) {
         try {
             var conn = getConnection(databaseName);
@@ -81,12 +85,12 @@ public class PersistenceUtils {
     }
 
     private static Connection getConnection(String databaseName) throws ClassNotFoundException, SQLException {
-        Class.forName("org.sqlite.JDBC");
+        Class.forName(CLASS_FOR_NAME);
         return DriverManager.getConnection(getConnectionUrl(databaseName));
     }
 
     private static String getConnectionUrl(String databaseName) {
         File dbFile = new File(".");
-        return format("jdbc:sqlite:" + dbFile.getAbsolutePath() + "\\%s.db", databaseName);
+        return format(CONNECTION_URL_START + dbFile.getAbsolutePath() + DATABASE_NAME_FORMAT, databaseName);
     }
 }
