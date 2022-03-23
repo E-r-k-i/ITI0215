@@ -8,7 +8,6 @@ import java.io.*;
 import java.net.URI;
 import java.nio.file.Paths;
 import java.util.Map;
-import java.util.Scanner;
 
 public class AddressService implements HttpHandler {
 

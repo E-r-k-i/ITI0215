@@ -22,6 +22,7 @@ import static java.lang.String.format;
 import static java.lang.Thread.sleep;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Comparator.comparing;
+import static persistence.PersistenceUtils.deleteAllBLocks;
 import static persistence.PersistenceUtils.insertBlock;
 import static util.HttpUtils.GSON;
 import static util.HttpUtils.HTTP_GET;
@@ -148,9 +149,7 @@ public class Node {
 
     private void getBlocksFromClones() throws IOException {
         addNodeLog(this, "querying blocks from all clones");
-        // collect blocks lists
         List<List<Block>> result = getBlockListsFromClones();
-        // if some list is bigger than current -> replace
         replaceBlocksIfNeeded(result);
     }
 
@@ -185,6 +184,7 @@ public class Node {
     private void refreshLedger(List<Block> largestList) {
         this.blocks.clear();
         this.blocks.addAll(largestList);
+        deleteAllBLocks(getNodeDatabaseName(ip, port));
         largestList.forEach(b -> insertBlock(getNodeDatabaseName(ip, port), b));
     }
 

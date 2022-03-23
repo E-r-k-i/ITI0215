@@ -19,7 +19,10 @@ public class PersistenceUtils {
             + " transaction_content text NOT NULL\n"
             + ");";
     private static final String INSERT_SQL = "INSERT INTO block(hash, transaction_content) VALUES(?,?)";
+    private static final String DELETE_FROM_TABLE_SQL = "DELETE FROM block;";
     private static final String SELECT_ALL_SQL = "SELECT * FROM block";
+    private static final String HASH_COLUMN = "hash";
+    private static final String TRANSACTION_CONTENT_COLUMN = "transaction_content";
 
     public static void createTableIfNotExists(String databaseName) {
         try {
@@ -43,20 +46,38 @@ public class PersistenceUtils {
         }
     }
 
+    public static void deleteAllBLocks(String databaseName) {
+        try {
+            var conn = getConnection(databaseName);
+            var stmt = conn.createStatement();
+            stmt.execute(DELETE_FROM_TABLE_SQL);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
     public static List<Block> queryBlocks(String databaseName) {
         try {
             var conn = getConnection(databaseName);
             var stmt = conn.createStatement();
-            ResultSet rs    = stmt.executeQuery(SELECT_ALL_SQL);
-            List<Block> result = new ArrayList<>();
-            while (rs.next()) {
-                result.add(new Block(rs.getString("hash"), rs.getString("transaction_content")));
-            }
-            return result;
+            var rs    = stmt.executeQuery(SELECT_ALL_SQL);
+            return getBlocksFromResultSet(rs);
         } catch (Exception e) {
             e.printStackTrace();
             return new ArrayList<>();
         }
+    }
+
+    private static List<Block> getBlocksFromResultSet(ResultSet rs) throws SQLException {
+        List<Block> result = new ArrayList<>();
+        while (rs.next()) {
+            result.add(getBlockFromResultSet(rs));
+        }
+        return result;
+    }
+
+    private static Block getBlockFromResultSet(ResultSet rs) throws SQLException {
+        return new Block(rs.getString(HASH_COLUMN), rs.getString(TRANSACTION_CONTENT_COLUMN));
     }
 
     private static Connection getConnection(String databaseName) throws ClassNotFoundException, SQLException {
