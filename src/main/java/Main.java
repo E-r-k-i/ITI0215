@@ -16,18 +16,16 @@ import static util.NodeUtils.BLOCKS_GET_PATH;
 import static util.NodeUtils.BLOCKS_PUSH_PATH;
 import static util.NodeUtils.CLONES_PATH;
 import static util.NodeUtils.TRANSACTION_PUSH_PATH;
-import static util.NodeUtils.getIpAddress;
 import static util.NodeUtils.getNodeDatabaseName;
 
 public class Main {
 
     public static void main(String[] args) throws IOException {
         var port = "8500";
+        var ip = "localhost";
         if (args.length > 0) {
             port = args[0];
         }
-
-        var ip = getIpAddress();
 
         createTableIfNotExists(getNodeDatabaseName(ip, port));
 

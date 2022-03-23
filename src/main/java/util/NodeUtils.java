@@ -21,18 +21,6 @@ public class NodeUtils {
     public static final String IP_FIELD = "ip";
     public static final String PORT_FIELD = "port";
 
-    public static String getIpAddress() throws UnknownHostException {
-        String ip;
-        try {
-            ip = InetAddress.getLocalHost().getHostAddress();
-            System.out.println("CURRENT IP ADDRESS IS : " + ip);
-            return ip;
-        } catch (UnknownHostException e) {
-            e.printStackTrace();
-            throw e;
-        }
-    }
-
     public static String getNodeQueryParams(Node node) {
         Map<String, String> params = new HashMap<>();
         params.put(IP_FIELD, node.getIp());
