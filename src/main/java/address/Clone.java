@@ -1,4 +1,4 @@
-package node;
+package address;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

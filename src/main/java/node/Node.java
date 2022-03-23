@@ -1,5 +1,6 @@
 package node;
 
+import address.Clone;
 import block.Block;
 import com.google.gson.stream.JsonReader;
 import com.sun.net.httpserver.HttpExchange;
@@ -31,6 +32,7 @@ import static util.HttpUtils.RESPONSE_CODE_OK;
 import static util.HttpUtils.createHttpUrl;
 import static util.HttpUtils.createHttpUrlConnection;
 import static util.NodeUtils.addNodeLog;
+import static util.NodeUtils.cloneEqualsNode;
 import static util.NodeUtils.getNodeDatabaseName;
 
 @Setter
@@ -136,6 +138,9 @@ public class Node {
 
     private void sendBlockToClones(Block block) throws IOException {
         for (Clone clone: clones) {
+            if (cloneEqualsNode(clone, this)) {
+                continue;
+            }
             var url = createHttpUrl(clone.getIp(), clone.getPort());
             addNodeLog(this, format("sending block to %s", url));
             byte[] payload = GSON.toJson(block).getBytes(UTF_8);
@@ -156,6 +161,9 @@ public class Node {
     private List<List<Block>> getBlockListsFromClones() throws IOException {
         List<List<Block>> result = new ArrayList<>();
         for (Clone clone: clones) {
+            if (cloneEqualsNode(clone, this)) {
+                continue;
+            }
             var url = createHttpUrl(clone.getIp(), clone.getPort());
             addNodeLog(this, format("querying block from clone %s", url));
             var connection = createHttpUrlConnection(HTTP_GET, url + "/blocks/get");

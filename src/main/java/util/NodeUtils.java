@@ -1,5 +1,6 @@
 package util;
 
+import address.Clone;
 import node.Node;
 
 import java.net.InetAddress;
@@ -20,6 +21,10 @@ public class NodeUtils {
             e.printStackTrace();
             throw e;
         }
+    }
+
+    public static boolean cloneEqualsNode(Clone clone, Node node) {
+        return clone.getIp().equals(node.getIp()) && clone.getPort().equals(node.getPort());
     }
 
     public static void addNodeLog(Node node, String message) {
