@@ -17,3 +17,14 @@ dependencies {
 	compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.18'
 	annotationProcessor 'org.projectlombok:lombok:1.18.22'
 }
+
+jar {
+	manifest {
+		attributes(
+				'Main-Class': 'Main'
+		)
+	}
+	from {
+		configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+	}
+}
